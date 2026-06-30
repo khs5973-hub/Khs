@@ -19,9 +19,11 @@
   .btn-primary:disabled { background:#9ca3af; cursor:not-allowed; }
   .btn-secondary { background:#e5e7eb; color:#333; }
   table { width:100%; border-collapse:collapse; margin-top:8px; font-size:13px; }
-  th, td { border:1px solid #e5e7eb; padding:8px 4px; text-align:center; }
+  th, td { border:1px solid #e5e7eb; padding:8px 4px; text-align:center; white-space:nowrap; }
   th { background:#f1f5f9; }
+  th .rank-line { display:block; }
   .total-row td { font-weight:700; background:#eef2ff; }
+  .place-row td { font-weight:700; background:#fff7ed; color:#c2410c; }
   .tabs { display:flex; gap:8px; margin-bottom:14px; }
   .tab { flex:1; padding:10px; text-align:center; border-radius:8px; background:#e5e7eb; cursor:pointer; font-size:14px; font-weight:600; }
   .tab.active { background:#2563eb; color:#fff; }
@@ -59,7 +61,9 @@
     <div style="text-align:right; margin-bottom:8px;">
       <span class="badge" id="totalVoters">총 0명</span>
     </div>
-    <table id="resultTable"></table>
+    <div style="overflow-x:auto;">
+      <table id="resultTable"></table>
+    </div>
   </div>
 
   <div id="adminSection" class="card hidden">
@@ -238,17 +242,22 @@ function renderResultsFromSnapshot(votesSnapshot) {
 
   let html = '<tr><th>구분</th>';
   order.forEach(idx => {
-    html += `<th>${placeOf[idx]}등 ${config.candidates[idx]}</th>`;
+    html += `<th>${config.candidates[idx]}</th>`;
   });
   html += '</tr>';
   ranks.forEach(r => {
-    html += `<tr><td>${r}등 (${config.points[r]}점)</td>`;
-    order.forEach(idx => { html += `<td>${tally[idx][r]}개</td>`; });
+    html += `<tr><td><span class="rank-line">${r}등</span><span class="rank-line">(${config.points[r]}점)</span></td>`;
+    order.forEach(idx => { html += `<td>${tally[idx][r]}표</td>`; });
     html += '</tr>';
   });
   html += '<tr class="total-row"><td>최종 총점</td>';
   order.forEach(idx => {
     html += `<td>${scores[idx]}점</td>`;
+  });
+  html += '</tr>';
+  html += '<tr class="place-row"><td>순위</td>';
+  order.forEach(idx => {
+    html += `<td>${placeOf[idx]}등</td>`;
   });
   html += '</tr>';
   document.getElementById('resultTable').innerHTML = html;
