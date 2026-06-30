@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>공제업무처리 우수직원 선정 투표</title>
+<style>
+  body { font-family: 'Malgun Gothic', sans-serif; margin:0; padding:16px; background:#f4f6f8; color:#222; }
+  .container { max-width: 640px; margin: 0 auto; }
+  h1 { text-align:center; font-size:22px; margin-bottom:4px;}
+  .sub { text-align:center; color:#666; font-size:13px; margin-bottom:20px;}
+  .card { background:#fff; border-radius:10px; padding:18px; margin-bottom:16px; box-shadow:0 2px 6px rgba(0,0,0,0.06); }
+  .candidate-row { display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid #eee; }
+  .candidate-row:last-child { border-bottom:none; }
+  .candidate-name { font-weight:600; font-size:15px; }
+  select { padding:8px; border-radius:6px; border:1px solid #ccc; font-size:14px; }
+  button { width:100%; padding:13px; border:none; border-radius:8px; font-size:15px; font-weight:600; cursor:pointer; margin-top:8px; }
+  .btn-primary { background:#2563eb; color:#fff; }
+  .btn-primary:disabled { background:#9ca3af; cursor:not-allowed; }
+  .btn-secondary { background:#e5e7eb; color:#333; }
+  table { width:100%; border-collapse:collapse; margin-top:8px; font-size:13px; }
+  th, td { border:1px solid #e5e7eb; padding:8px 4px; text-align:center; }
+  th { background:#f1f5f9; }
+  .total-row td { font-weight:700; background:#eef2ff; }
+  .tabs { display:flex; gap:8px; margin-bottom:14px; }
+  .tab { flex:1; padding:10px; text-align:center; border-radius:8px; background:#e5e7eb; cursor:pointer; font-size:14px; font-weight:600; }
+  .tab.active { background:#2563eb; color:#fff; }
+  .hidden { display:none; }
+  .admin-row { display:flex; gap:8px; align-items:center; margin-bottom:10px; }
+  .admin-row input[type=text] { flex:1; padding:8px; border-radius:6px; border:1px solid #ccc; }
+  .admin-row input[type=number] { width:70px; padding:8px; border-radius:6px; border:1px solid #ccc; }
+  .label { font-size:13px; color:#555; min-width:60px; }
+  .status { text-align:center; font-size:13px; color:#888; margin-top:6px; white-space:pre-line; }
+  .badge { display:inline-block; background:#dbeafe; color:#1d4ed8; border-radius:999px; padding:2px 10px; font-size:12px; margin-left:6px;}
+  .live { display:inline-block; width:8px; height:8px; border-radius:50%; background:#22c55e; margin-right:5px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div style="text-align:center; font-size:13px; color:#94a3b8; font-weight:600; letter-spacing:0.5px; margin-bottom:6px;">전국택시공제조합 부산지부</div>
+  <h1>🗳️ 공제업무처리 우수직원 선정 투표</h1>
+  <div class="sub"><span class="live"></span>실시간 연동 — 후보를 골라 순위를 매기면 가산점이 자동 합산됩니다</div>
+
+  <div class="tabs">
+    <div class="tab active" id="tabVote" onclick="switchTab('vote')">투표하기</div>
+    <div class="tab" id="tabResult" onclick="switchTab('result')">결과보기</div>
+    <div class="tab" id="tabAdmin" onclick="switchTab('admin')">설정</div>
+  </div>
+
+  <div id="voteSection" class="card">
+    <div id="loadingNotice" class="status">⏳ 연결 중...</div>
+    <div id="candidateRows"></div>
+    <div id="selectHint" style="text-align:center; font-size:13px; font-weight:600; margin-bottom:10px;"></div>
+    <button class="btn-primary" id="submitVoteBtn" onclick="submitVote()" disabled>투표 제출하기</button>
+    <div class="status" id="voteStatus"></div>
+  </div>
+
+  <div id="resultSection" class="card hidden">
+    <div style="text-align:right; margin-bottom:8px;">
+      <span class="badge" id="totalVoters">총 0명</span>
+    </div>
+    <table id="resultTable"></table>
+  </div>
+
+  <div id="adminSection" class="card hidden">
+    <p style="font-size:13px; color:#666;">후보 이름과 등수별 가산점을 입력하고 저장하면, 같은 링크를 받은 모든 사람 화면에 새로고침 없이 즉시 반영됩니다.</p>
+    <div id="candidateConfigRows"></div>
+    <button class="btn-secondary" onclick="addCandidateRow()">+ 후보 추가</button>
+    <hr style="margin:16px 0; border:none; border-top:1px solid #eee;">
+    <div id="pointConfigRows"></div>
+    <hr style="margin:16px 0; border:none; border-top:1px solid #eee;">
+    <button class="btn-primary" onclick="saveConfig()">💾 설정 저장 (모두에게 즉시 반영)</button>
+    <div class="status" id="adminStatus"></div>
+    <hr style="margin:16px 0; border:none; border-top:1px solid #eee;">
+    <button class="btn-secondary" onclick="resetVotes()">⚠️ 모든 투표 기록 초기화</button>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getFirestore, doc, setDoc, getDoc, onSnapshot,
+  collection, addDoc, deleteDoc, getDocs
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyC1Jt5BniTUdYtg9Ouw33FpNbV9ujqaMs4",
+  authDomain: "taxi-a047a.firebaseapp.com",
+  projectId: "taxi-a047a",
+  storageBucket: "taxi-a047a.firebasestorage.app",
+  messagingSenderId: "67219342100",
+  appId: "1:67219342100:web:555f5f62ea5db9f160f801"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const CONFIG_DOC = doc(db, "voteApp", "config");
+const VOTES_COL = collection(db, "voteApp_votes");
+
+let config = { candidates: ["김현수","정지완","이상민","고명환","전창환"], points: {1:3, 2:2, 3:1} };
+let myDeviceId = localStorage.getItem('vote_device_id');
+if (!myDeviceId) {
+  myDeviceId = 'dev_' + Date.now() + '_' + Math.random().toString(36).slice(2,10);
+  localStorage.setItem('vote_device_id', myDeviceId);
+}
+
+window.switchTab = function(name) {
+  document.getElementById('voteSection').classList.toggle('hidden', name!=='vote');
+  document.getElementById('resultSection').classList.toggle('hidden', name!=='result');
+  document.getElementById('adminSection').classList.toggle('hidden', name!=='admin');
+  document.getElementById('tabVote').classList.toggle('active', name==='vote');
+  document.getElementById('tabResult').classList.toggle('active', name==='result');
+  document.getElementById('tabAdmin').classList.toggle('active', name==='admin');
+  if (name === 'admin') renderAdminConfig();
+};
+
+function renderVoteForm() {
+  document.getElementById('loadingNotice').style.display = 'none';
+  const wrap = document.getElementById('candidateRows');
+  wrap.innerHTML = '';
+  const ranks = Object.keys(config.points).sort((a,b)=>a-b);
+  config.candidates.forEach((name, idx) => {
+    const row = document.createElement('div');
+    row.className = 'candidate-row';
+    let options = '<option value="">-- 선택 --</option>';
+    ranks.forEach(r => { options += `<option value="${r}">${r}등 (${config.points[r]}점)</option>`; });
+    row.innerHTML = `<span class="candidate-name">${name}</span>
+      <select class="rank-select" data-idx="${idx}">${options}</select>`;
+    wrap.appendChild(row);
+  });
+  document.querySelectorAll('.rank-select').forEach(sel => sel.addEventListener('change', onRankChange));
+  const alreadyVoted = localStorage.getItem('voted_' + myDeviceId);
+  document.getElementById('voteStatus').innerHTML = alreadyVoted
+    ? '✅ 이 기기에서는 이미 투표하셨습니다.<br><button class="btn-secondary" style="margin-top:8px; padding:8px 14px; font-size:13px;" onclick="cancelMyVote()">내 투표 취소하고 다시 하기</button>'
+    : '';
+  onRankChange();
+}
+
+function onRankChange() {
+  const selects = document.querySelectorAll('.rank-select');
+  const usedRanks = [];
+  selects.forEach(sel => { if (sel.value) usedRanks.push(sel.value); });
+  selects.forEach(sel => {
+    Array.from(sel.options).forEach(opt => {
+      if (!opt.value) return;
+      opt.disabled = usedRanks.includes(opt.value) && sel.value !== opt.value;
+    });
+  });
+  const ranks = Object.keys(config.points);
+  const submitBtn = document.getElementById('submitVoteBtn');
+  if (submitBtn) submitBtn.disabled = usedRanks.length !== ranks.length;
+  const hint = document.getElementById('selectHint');
+  if (hint) {
+    const remaining = ranks.length - usedRanks.length;
+    hint.innerText = remaining > 0 ? `⬇️ 등수를 ${remaining}개 더 선택해야 제출 버튼이 활성화됩니다.` : '✅ 모두 선택했습니다. 제출 버튼을 눌러주세요.';
+    hint.style.color = remaining > 0 ? '#d97706' : '#16a34a';
+  }
+}
+
+window.submitVote = async function() {
+  if (localStorage.getItem('voted_' + myDeviceId)) { alert('이미 투표에 참여하셨습니다!'); return; }
+  const selects = document.querySelectorAll('.rank-select');
+  const ranks = Object.keys(config.points);
+  let usedRanks = [], voteRanks = {}, hasDuplicate = false;
+  selects.forEach(sel => {
+    const val = sel.value;
+    if (val) {
+      if (usedRanks.includes(val)) hasDuplicate = true;
+      else { usedRanks.push(val); voteRanks[sel.dataset.idx] = val; }
+    }
+  });
+  if (hasDuplicate || usedRanks.length !== ranks.length) { alert('중복 선택 또는 미완료 항목이 있습니다.'); return; }
+
+  document.getElementById('voteStatus').innerText = '⏳ 제출 중...';
+  try {
+    const docRef = await addDoc(VOTES_COL, { ranks: voteRanks, ts: Date.now() });
+    localStorage.setItem('voted_' + myDeviceId, 'true');
+    localStorage.setItem('voteDocId_' + myDeviceId, docRef.id);
+    document.getElementById('voteStatus').innerText = '✅ 투표가 완료되었습니다. 감사합니다!';
+    selects.forEach(s => s.value = '');
+    onRankChange();
+    switchTab('result');
+  } catch (e) {
+    console.error(e);
+    document.getElementById('voteStatus').innerHTML = '⚠️ 저장 실패 (' + e.message + ').<br><button class="btn-primary" style="margin-top:8px;" onclick="submitVote()">다시 시도하기</button>';
+  }
+};
+
+window.cancelMyVote = async function() {
+  const docId = localStorage.getItem('voteDocId_' + myDeviceId);
+  document.getElementById('voteStatus').innerText = '⏳ 취소 중...';
+  try {
+    if (docId) await deleteDoc(doc(db, "voteApp_votes", docId));
+    localStorage.removeItem('voted_' + myDeviceId);
+    localStorage.removeItem('voteDocId_' + myDeviceId);
+    document.getElementById('voteStatus').innerText = '✅ 취소되었습니다.';
+    renderVoteForm();
+  } catch (e) {
+    document.getElementById('voteStatus').innerText = '⚠️ 취소 중 오류 발생: ' + e.message;
+  }
+};
+
+function renderResultsFromSnapshot(votesSnapshot) {
+  const ranks = Object.keys(config.points).sort((a,b)=>a-b);
+  const tally = {};
+  config.candidates.forEach((_, idx) => { tally[idx] = {}; ranks.forEach(r => tally[idx][r] = 0); });
+  let count = 0;
+  votesSnapshot.forEach(d => {
+    count++;
+    const voteRanks = d.data().ranks || {};
+    Object.entries(voteRanks).forEach(([idx, rank]) => {
+      if (tally[idx] && tally[idx][rank] !== undefined) tally[idx][rank]++;
+    });
+  });
+  document.getElementById('totalVoters').innerText = `총 ${count}명`;
+  let html = '<tr><th>구분</th>';
+  config.candidates.forEach(name => html += `<th>${name}</th>`);
+  html += '</tr>';
+  ranks.forEach(r => {
+    html += `<tr><td>${r}등 (${config.points[r]}점)</td>`;
+    config.candidates.forEach((_, idx) => { html += `<td>${tally[idx][r]}개</td>`; });
+    html += '</tr>';
+  });
+  html += '<tr class="total-row"><td>최종 총점</td>';
+  config.candidates.forEach((_, idx) => {
+    let s = 0; ranks.forEach(r => s += tally[idx][r] * config.points[r]);
+    html += `<td>${s}점</td>`;
+  });
+  html += '</tr>';
+  document.getElementById('resultTable').innerHTML = html;
+}
+
+function renderAdminConfig() {
+  const wrap = document.getElementById('candidateConfigRows');
+  wrap.innerHTML = '';
+  config.candidates.forEach((name, idx) => {
+    const row = document.createElement('div');
+    row.className = 'admin-row';
+    row.innerHTML = `<span class="label">후보 ${idx+1}</span>
+      <input type="text" value="${name}" class="candidate-input">
+      <button class="btn-secondary" style="width:auto; padding:8px 12px;" data-idx="${idx}">삭제</button>`;
+    row.querySelector('button').addEventListener('click', () => removeCandidateRow(idx));
+    wrap.appendChild(row);
+  });
+  const pwrap = document.getElementById('pointConfigRows');
+  pwrap.innerHTML = '<p style="font-size:13px; color:#555; margin-bottom:8px;">등수별 가산점</p>';
+  const ranks = Object.keys(config.points).sort((a,b)=>a-b);
+  ranks.forEach(r => {
+    const row = document.createElement('div');
+    row.className = 'admin-row';
+    row.innerHTML = `<span class="label">${r}등</span>
+      <input type="number" value="${config.points[r]}" data-pidx="${r}" class="point-input">
+      <button class="btn-secondary" style="width:auto; padding:8px 12px;">삭제</button>`;
+    row.querySelector('button').addEventListener('click', () => removePointRow(r));
+    pwrap.appendChild(row);
+  });
+  const addRankBtn = document.createElement('button');
+  addRankBtn.className = 'btn-secondary';
+  addRankBtn.innerText = '+ 등수 추가';
+  addRankBtn.onclick = addPointRow;
+  pwrap.appendChild(addRankBtn);
+}
+
+function syncInputsToConfig() {
+  const nameInputs = document.querySelectorAll('.candidate-input');
+  if (nameInputs.length) config.candidates = Array.from(nameInputs).map(inp => inp.value.trim() || '후보');
+  const pointInputs = document.querySelectorAll('.point-input');
+  if (pointInputs.length) {
+    const newPoints = {};
+    pointInputs.forEach(inp => { newPoints[inp.dataset.pidx] = Number(inp.value) || 0; });
+    config.points = newPoints;
+  }
+}
+
+window.addCandidateRow = function() { syncInputsToConfig(); config.candidates.push('새 후보'); renderAdminConfig(); };
+window.removeCandidateRow = function(idx) { syncInputsToConfig(); config.candidates.splice(idx, 1); renderAdminConfig(); };
+window.addPointRow = function() {
+  syncInputsToConfig();
+  const ranks = Object.keys(config.points).map(Number);
+  const next = ranks.length ? Math.max(...ranks) + 1 : 1;
+  config.points[next] = 1;
+  renderAdminConfig();
+};
+window.removePointRow = function(r) { syncInputsToConfig(); delete config.points[r]; renderAdminConfig(); };
+
+window.saveConfig = async function() {
+  syncInputsToConfig();
+  document.getElementById('adminStatus').innerText = '⏳ 저장 중...';
+  try {
+    await setDoc(CONFIG_DOC, config);
+    document.getElementById('adminStatus').innerText = '✅ 저장 완료! 모든 사람 화면에 실시간으로 반영됩니다.';
+  } catch (e) {
+    console.error(e);
+    document.getElementById('adminStatus').innerText = '⚠️ 저장 실패: ' + e.message;
+  }
+};
+
+let resetArmed = false;
+window.resetVotes = async function() {
+  if (!resetArmed) {
+    resetArmed = true;
+    document.getElementById('adminStatus').innerText = '⚠️ 정말 초기화하려면 버튼을 한 번 더 눌러주세요.';
+    setTimeout(() => { resetArmed = false; }, 5000);
+    return;
+  }
+  resetArmed = false;
+  document.getElementById('adminStatus').innerText = '⏳ 초기화 중...';
+  try {
+    const snap = await getDocs(VOTES_COL);
+    const deletions = [];
+    snap.forEach(d => deletions.push(deleteDoc(doc(db, "voteApp_votes", d.id))));
+    await Promise.all(deletions);
+    localStorage.removeItem('voted_' + myDeviceId);
+    localStorage.removeItem('voteDocId_' + myDeviceId);
+    document.getElementById('adminStatus').innerText = `✅ 초기화 완료 (${deletions.length}건 삭제)`;
+  } catch (e) {
+    document.getElementById('adminStatus').innerText = '⚠️ 초기화 중 오류: ' + e.message;
+  }
+};
+
+// 설정 실시간 구독 — 누가 바꾸든 모든 화면에 즉시 반영
+onSnapshot(CONFIG_DOC, (snap) => {
+  if (snap.exists()) {
+    const data = snap.data();
+    if (data && data.candidates && data.points) {
+      config = data;
+    }
+  }
+  renderVoteForm();
+  if (!document.getElementById('adminSection').classList.contains('hidden')) {
+    renderAdminConfig();
+  }
+}, (err) => {
+  document.getElementById('loadingNotice').innerText = '⚠️ 연결 실패: ' + err.message;
+});
+
+// 투표 결과 실시간 구독
+onSnapshot(VOTES_COL, (snap) => {
+  renderResultsFromSnapshot(snap);
+}, (err) => {
+  console.error('votes snapshot error', err);
+});
+</script>
+</body>
+</html>
