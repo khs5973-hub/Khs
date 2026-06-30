@@ -214,18 +214,41 @@ function renderResultsFromSnapshot(votesSnapshot) {
     });
   });
   document.getElementById('totalVoters').innerText = `총 ${count}명`;
+
+  // 후보별 최종 점수 계산
+  const scores = config.candidates.map((_, idx) => {
+    let s = 0; ranks.forEach(r => s += tally[idx][r] * config.points[r]);
+    return s;
+  });
+
+  // 점수 내림차순으로 후보 인덱스 정렬 (동점은 입력 순서 유지)
+  const order = config.candidates.map((_, idx) => idx)
+    .sort((a, b) => scores[b] - scores[a]);
+
+  // 동점자는 같은 등수를 갖도록 등수 계산
+  const placeOf = {};
+  order.forEach((idx, i) => {
+    if (i === 0) {
+      placeOf[idx] = 1;
+    } else {
+      const prevIdx = order[i - 1];
+      placeOf[idx] = scores[idx] === scores[prevIdx] ? placeOf[prevIdx] : i + 1;
+    }
+  });
+
   let html = '<tr><th>구분</th>';
-  config.candidates.forEach(name => html += `<th>${name}</th>`);
+  order.forEach(idx => {
+    html += `<th>${placeOf[idx]}등 ${config.candidates[idx]}</th>`;
+  });
   html += '</tr>';
   ranks.forEach(r => {
     html += `<tr><td>${r}등 (${config.points[r]}점)</td>`;
-    config.candidates.forEach((_, idx) => { html += `<td>${tally[idx][r]}개</td>`; });
+    order.forEach(idx => { html += `<td>${tally[idx][r]}개</td>`; });
     html += '</tr>';
   });
   html += '<tr class="total-row"><td>최종 총점</td>';
-  config.candidates.forEach((_, idx) => {
-    let s = 0; ranks.forEach(r => s += tally[idx][r] * config.points[r]);
-    html += `<td>${s}점</td>`;
+  order.forEach(idx => {
+    html += `<td>${scores[idx]}점</td>`;
   });
   html += '</tr>';
   document.getElementById('resultTable').innerHTML = html;
