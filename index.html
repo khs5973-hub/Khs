@@ -38,6 +38,9 @@
   .live { display:inline-block; width:8px; height:8px; border-radius:50%; background:#22c55e; margin-right:5px; }
 </style>
 </head>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <body>
 <div class="container">
   <div style="text-align:center; font-size:13px; color:#94a3b8; font-weight:600; letter-spacing:0.5px; margin-bottom:6px;">전국택시공제조합 부산지부</div>
@@ -63,6 +66,10 @@
     </div>
     <div style="overflow-x:auto;">
       <table id="resultTable"></table>
+    </div>
+    <div style="display:flex; gap:8px; margin-top:14px;">
+      <button class="btn-secondary" style="flex:1; padding:10px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; border:none;" onclick="downloadExcel()">📊 엑셀 다운로드</button>
+      <button class="btn-secondary" style="flex:1; padding:10px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; border:none;" onclick="downloadPDF()">📄 PDF 다운로드</button>
     </div>
   </div>
 
@@ -379,6 +386,38 @@ onSnapshot(VOTES_COL, (snap) => {
 }, (err) => {
   console.error('votes snapshot error', err);
 });
+
+function downloadExcel() {
+  const table = document.getElementById('resultTable');
+  if (!table || !table.rows.length) return alert('결과 데이터가 없습니다.');
+  const rows = [];
+  for (const tr of table.rows) {
+    const row = [];
+    for (const cell of tr.cells) row.push(cell.innerText);
+    rows.push(row);
+  }
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '투표결과');
+  XLSX.writeFile(wb, '공제업무처리_우수직원_투표결과.xlsx');
+}
+
+function downloadPDF() {
+  const table = document.getElementById('resultTable');
+  if (!table || !table.rows.length) return alert('결과 데이터가 없습니다.');
+  const head = [], body = [];
+  for (let i = 0; i < table.rows.length; i++) {
+    const cells = Array.from(table.rows[i].cells).map(c => c.innerText);
+    if (i === 0) head.push(cells);
+    else body.push(cells);
+  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape' });
+  doc.setFont('helvetica');
+  doc.text('공제업무처리 우수직원 선정 투표 결과', 14, 15);
+  doc.autoTable({ head, body, startY: 22, styles: { font: 'helvetica', fontSize: 10 }, headStyles: { fillColor: [37, 99, 235] } });
+  doc.save('공제업무처리_우수직원_투표결과.pdf');
+}
 </script>
 </body>
 </html>
