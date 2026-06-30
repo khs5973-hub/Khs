@@ -38,9 +38,7 @@
   .live { display:inline-block; width:8px; height:8px; border-radius:50%; background:#22c55e; margin-right:5px; }
 </style>
 </head>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
 <body>
 <div class="container">
   <div style="text-align:center; font-size:13px; color:#94a3b8; font-weight:600; letter-spacing:0.5px; margin-bottom:6px;">전국택시공제조합 부산지부</div>
@@ -386,37 +384,47 @@ onSnapshot(VOTES_COL, (snap) => {
 }, (err) => {
   console.error('votes snapshot error', err);
 });
+</script>
 
+<script>
 function downloadExcel() {
   const table = document.getElementById('resultTable');
-  if (!table || !table.rows.length) return alert('결과 데이터가 없습니다.');
-  const rows = [];
+  if (!table || !table.rows.length) { alert('결과 데이터가 없습니다.'); return; }
+  let csv = '\uFEFF'; // BOM for Korean
   for (const tr of table.rows) {
-    const row = [];
-    for (const cell of tr.cells) row.push(cell.innerText);
-    rows.push(row);
+    const cells = Array.from(tr.cells).map(c => '"' + c.innerText.replace(/"/g, '""') + '"');
+    csv += cells.join(',') + '\n';
   }
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, '투표결과');
-  XLSX.writeFile(wb, '공제업무처리_우수직원_투표결과.xlsx');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '공제업무처리_우수직원_투표결과.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 function downloadPDF() {
   const table = document.getElementById('resultTable');
-  if (!table || !table.rows.length) return alert('결과 데이터가 없습니다.');
-  const head = [], body = [];
-  for (let i = 0; i < table.rows.length; i++) {
-    const cells = Array.from(table.rows[i].cells).map(c => c.innerText);
-    if (i === 0) head.push(cells);
-    else body.push(cells);
-  }
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'landscape' });
-  doc.setFont('helvetica');
-  doc.text('공제업무처리 우수직원 선정 투표 결과', 14, 15);
-  doc.autoTable({ head, body, startY: 22, styles: { font: 'helvetica', fontSize: 10 }, headStyles: { fillColor: [37, 99, 235] } });
-  doc.save('공제업무처리_우수직원_투표결과.pdf');
+  if (!table || !table.rows.length) { alert('결과 데이터가 없습니다.'); return; }
+  const win = window.open('', '_blank');
+  win.document.write(`
+    <html><head><meta charset="UTF-8"><title>투표결과</title>
+    <style>
+      body { font-family: 'Malgun Gothic', sans-serif; padding: 20px; }
+      h2 { text-align: center; margin-bottom: 16px; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th, td { border: 1px solid #999; padding: 8px 6px; text-align: center; }
+      th { background: #dbeafe; font-weight: bold; }
+      tr:last-child td { background: #fff7ed; color: #c2410c; font-weight: bold; }
+      tr:nth-last-child(2) td { background: #eef2ff; font-weight: bold; }
+    </style></head><body>
+    <h2>공제업무처리 우수직원 선정 투표 결과</h2>
+    ${table.outerHTML}
+    <script>window.onload=function(){window.print();}<\/script>
+    </body></html>
+  `);
+  win.document.close();
 }
 </script>
 </body>
