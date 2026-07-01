@@ -41,13 +41,13 @@
 
 <body>
 <div class="container">
-  <div style="text-align:center; font-size:13px; color:#94a3b8; font-weight:600; letter-spacing:0.5px; margin-bottom:6px;">전국택시공제조합 부산지부</div>
+  <div style="text-align:center; font-size:18px; color:#000; font-weight:700; letter-spacing:0.5px; margin-bottom:6px;">전국택시공제조합 부산지부</div>
   <h1>🗳️ 공제업무처리 우수직원 선정 투표</h1>
 
   <div class="tabs">
     <div class="tab active" id="tabVote" onclick="switchTab('vote')">투표하기</div>
     <div class="tab" id="tabResult" onclick="switchTab('result')">결과보기</div>
-    <div class="tab" id="tabAdmin" onclick="switchTab('admin')">설정</div>
+    <div class="tab" id="tabAdmin" onclick="adminTabClick()">설정</div>
   </div>
 
   <div id="voteSection" class="card">
@@ -384,6 +384,14 @@ onSnapshot(VOTES_COL, (snap) => {
 }, (err) => {
   console.error('votes snapshot error', err);
 });
+function adminTabClick() {
+  const pw = prompt('설정 비밀번호를 입력하세요:');
+  if (pw === '8211') {
+    switchTab('admin');
+  } else if (pw !== null) {
+    alert('비밀번호가 틀렸습니다.');
+  }
+}
 </script>
 
 <script>
