@@ -42,7 +42,7 @@
 <body>
 <div class="container">
   <div style="text-align:center; font-size:26px; color:#000; font-weight:700; letter-spacing:0.5px; margin-bottom:6px;">전국택시공제조합 부산지부</div>
-  <h1>🗳️ 공제업무처리 우수직원 선정 투표</h1>
+  <h1 id="voteTitle">🗳️ 공제업무처리 우수직원 선정 투표</h1>
 
   <div class="tabs">
     <div class="tab active" id="tabVote" onclick="switchTab('vote')">투표하기</div>
@@ -72,7 +72,9 @@
   </div>
 
   <div id="adminSection" class="card hidden">
-    <p style="font-size:13px; color:#666;">후보 이름과 등수별 가산점을 입력하고 저장하면, 같은 링크를 받은 모든 사람 화면에 새로고침 없이 즉시 반영됩니다.</p>
+    <p style="font-size:13px; color:#666;">투표 제목, 후보 이름, 등수별 가산점을 입력하고 저장하면, 같은 링크를 받은 모든 사람 화면에 새로고침 없이 즉시 반영됩니다.</p>
+    <div class="admin-row" id="titleConfigRow"></div>
+    <hr style="margin:16px 0; border:none; border-top:1px solid #eee;">
     <div id="candidateConfigRows"></div>
     <button class="btn-secondary" onclick="addCandidateRow()">+ 후보 추가</button>
     <hr style="margin:16px 0; border:none; border-top:1px solid #eee;">
@@ -107,7 +109,15 @@ const db = getFirestore(app);
 const CONFIG_DOC = doc(db, "voteApp", "config");
 const VOTES_COL = collection(db, "voteApp_votes");
 
-let config = { candidates: ["김현수","정지완","이상민","고명환","전창환"], points: {1:3, 2:2, 3:1} };
+const DEFAULT_TITLE = "공제업무처리 우수직원 선정 투표";
+let config = { title: DEFAULT_TITLE, candidates: ["김현수","정지완","이상민","고명환","전창환"], points: {1:3, 2:2, 3:1} };
+
+function applyTitle() {
+  const t = (config.title || DEFAULT_TITLE).trim() || DEFAULT_TITLE;
+  document.getElementById('voteTitle').innerText = '🗳️ ' + t;
+  document.title = t;
+  window.currentVoteTitle = t; // 엑셀/PDF 다운로드에서 사용
+}
 let myDeviceId = localStorage.getItem('vote_device_id');
 if (!myDeviceId) {
   myDeviceId = 'dev_' + Date.now() + '_' + Math.random().toString(36).slice(2,10);
@@ -275,6 +285,9 @@ function renderResultsFromSnapshot(votesSnapshot) {
 }
 
 function renderAdminConfig() {
+  const twrap = document.getElementById('titleConfigRow');
+  twrap.innerHTML = `<span class="label">투표 제목</span>
+    <input type="text" id="titleInput" value="${(config.title || DEFAULT_TITLE).replace(/"/g, '&quot;')}" placeholder="투표 제목을 입력하세요">`;
   const wrap = document.getElementById('candidateConfigRows');
   wrap.innerHTML = '';
   config.candidates.forEach((name, idx) => {
@@ -306,6 +319,8 @@ function renderAdminConfig() {
 }
 
 function syncInputsToConfig() {
+  const titleInput = document.getElementById('titleInput');
+  if (titleInput) config.title = titleInput.value.trim() || DEFAULT_TITLE;
   const nameInputs = document.querySelectorAll('.candidate-input');
   if (nameInputs.length) config.candidates = Array.from(nameInputs).map(inp => inp.value.trim() || '후보');
   const pointInputs = document.querySelectorAll('.point-input');
@@ -367,9 +382,11 @@ onSnapshot(CONFIG_DOC, (snap) => {
   if (snap.exists()) {
     const data = snap.data();
     if (data && data.candidates && data.points) {
+      if (!data.title) data.title = DEFAULT_TITLE; // 예전 설정 문서 호환
       config = data;
     }
   }
+  applyTitle();
   renderVoteForm();
   if (!document.getElementById('adminSection').classList.contains('hidden')) {
     renderAdminConfig();
@@ -407,7 +424,8 @@ function downloadExcel() {
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = '공제업무처리_우수직원_투표결과.csv';
+  const t = (window.currentVoteTitle || '투표').replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '_');
+  a.download = t + '_결과.csv';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -416,9 +434,10 @@ function downloadExcel() {
 function downloadPDF() {
   const table = document.getElementById('resultTable');
   if (!table || !table.rows.length) { alert('결과 데이터가 없습니다.'); return; }
+  const t = window.currentVoteTitle || '투표';
   const win = window.open('', '_blank');
   win.document.write(`
-    <html><head><meta charset="UTF-8"><title>투표결과</title>
+    <html><head><meta charset="UTF-8"><title>${t} 결과</title>
     <style>
       body { font-family: 'Malgun Gothic', sans-serif; padding: 20px; }
       h2 { text-align: center; margin-bottom: 16px; }
@@ -428,7 +447,7 @@ function downloadPDF() {
       tr:last-child td { background: #fff7ed; color: #c2410c; font-weight: bold; }
       tr:nth-last-child(2) td { background: #eef2ff; font-weight: bold; }
     </style></head><body>
-    <h2>공제업무처리 우수직원 선정 투표 결과</h2>
+    <h2>${t} 결과</h2>
     ${table.outerHTML}
     <script>window.onload=function(){window.print();}<\/script>
     </body></html>
