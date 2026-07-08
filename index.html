@@ -74,6 +74,7 @@
   <div id="adminSection" class="card hidden">
     <p style="font-size:13px; color:#666;">투표 제목, 후보 이름, 등수별 가산점을 입력하고 저장하면, 같은 링크를 받은 모든 사람 화면에 새로고침 없이 즉시 반영됩니다.</p>
     <div class="admin-row" id="titleConfigRow"></div>
+    <div class="admin-row" id="pwConfigRow"></div>
     <hr style="margin:16px 0; border:none; border-top:1px solid #eee;">
     <div id="candidateConfigRows"></div>
     <button class="btn-secondary" onclick="addCandidateRow()">+ 후보 추가</button>
@@ -110,13 +111,15 @@ const CONFIG_DOC = doc(db, "voteApp", "config");
 const VOTES_COL = collection(db, "voteApp_votes");
 
 const DEFAULT_TITLE = "공제업무처리 우수직원 선정 투표";
-let config = { title: DEFAULT_TITLE, candidates: ["김현수","정지완","이상민","고명환","전창환"], points: {1:3, 2:2, 3:1} };
+const DEFAULT_PW = "8211";
+let config = { title: DEFAULT_TITLE, adminPw: DEFAULT_PW, candidates: ["김현수","정지완","이상민","고명환","전창환"], points: {1:3, 2:2, 3:1} };
 
 function applyTitle() {
   const t = (config.title || DEFAULT_TITLE).trim() || DEFAULT_TITLE;
   document.getElementById('voteTitle').innerText = '🗳️ ' + t;
   document.title = t;
   window.currentVoteTitle = t; // 엑셀/PDF 다운로드에서 사용
+  window.currentAdminPw = config.adminPw || DEFAULT_PW; // 설정 탭 비밀번호 확인에서 사용
 }
 let myDeviceId = localStorage.getItem('vote_device_id');
 if (!myDeviceId) {
@@ -288,6 +291,9 @@ function renderAdminConfig() {
   const twrap = document.getElementById('titleConfigRow');
   twrap.innerHTML = `<span class="label">투표 제목</span>
     <input type="text" id="titleInput" value="${(config.title || DEFAULT_TITLE).replace(/"/g, '&quot;')}" placeholder="투표 제목을 입력하세요">`;
+  const pwRow = document.getElementById('pwConfigRow');
+  pwRow.innerHTML = `<span class="label">설정 비밀번호</span>
+    <input type="text" id="pwInput" value="${(config.adminPw || DEFAULT_PW).replace(/"/g, '&quot;')}" placeholder="설정 탭 비밀번호">`;
   const wrap = document.getElementById('candidateConfigRows');
   wrap.innerHTML = '';
   config.candidates.forEach((name, idx) => {
@@ -321,6 +327,11 @@ function renderAdminConfig() {
 function syncInputsToConfig() {
   const titleInput = document.getElementById('titleInput');
   if (titleInput) config.title = titleInput.value.trim() || DEFAULT_TITLE;
+  const pwInput = document.getElementById('pwInput');
+  if (pwInput) {
+    const pw = pwInput.value.trim();
+    if (pw) config.adminPw = pw; // 비워두면 기존 비밀번호 유지
+  }
   const nameInputs = document.querySelectorAll('.candidate-input');
   if (nameInputs.length) config.candidates = Array.from(nameInputs).map(inp => inp.value.trim() || '후보');
   const pointInputs = document.querySelectorAll('.point-input');
@@ -383,6 +394,7 @@ onSnapshot(CONFIG_DOC, (snap) => {
     const data = snap.data();
     if (data && data.candidates && data.points) {
       if (!data.title) data.title = DEFAULT_TITLE; // 예전 설정 문서 호환
+      if (!data.adminPw) data.adminPw = DEFAULT_PW; // 예전 설정 문서 호환
       config = data;
     }
   }
@@ -405,8 +417,12 @@ onSnapshot(VOTES_COL, (snap) => {
 
 <script>
 function adminTabClick() {
+  if (!window.currentAdminPw) {
+    alert('아직 서버와 연결 중입니다. 잠시 후 다시 시도해주세요.');
+    return;
+  }
   const pw = prompt('설정 비밀번호를 입력하세요:');
-  if (pw === '8211') {
+  if (pw === window.currentAdminPw) {
     switchTab('admin');
   } else if (pw !== null) {
     alert('비밀번호가 틀렸습니다.');
